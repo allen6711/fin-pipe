@@ -56,6 +56,9 @@
     <script type="text/babel">
         const { useState, useEffect, useCallback, useRef, memo } = React;
 
+        // --- GLOBAL CONSTANTS ---
+        const APP_DEFINED_FIELDS = { date: 'Date', description: 'Description', amount: 'Amount', category: 'Category', notes: 'Notes' };
+
         // --- SVG Icons (No Changes) --- //
         const UploadIcon = () => ( <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mx-auto h-12 w-12 text-brand-text-secondary"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg> );
         const SettingsIcon = () => ( <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 0 2.4l-.15.08a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l-.22-.38a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1 0-2.4l.15.08a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"></path><circle cx="12" cy="12" r="3"></circle></svg> );
@@ -63,6 +66,7 @@
         const Spinner = () => ( <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> );
         const ChevronDownIcon = () => (<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4"><path d="m6 9 6 6 6-6"/></svg>);
 
+        // --- Child Components ---
         const CustomDropdown = ({ options, selectedValue, onChange }) => {
             const [isOpen, setIsOpen] = useState(false);
             const dropdownRef = useRef(null);
@@ -144,16 +148,15 @@
             );
         };
         
-        // **NEW**: Memoized table row component to prevent re-renders
-        const MemoizedTableRow = memo(({ item, categories, onCategoryChange, onNoteChange }) => {
+        const MemoizedTableRow = memo(({ item, categories, onCategoryChange, onNoteChange, formatDisplayDate }) => {
             const dropdownOptions = [...categories];
             if (item.category === 'Error' && !dropdownOptions.includes('Error')) {
                 dropdownOptions.push('Error');
             }
-
+            
             return (
                 <tr className="hover:bg-yellow-50">
-                    <td className="p-3">{item.date instanceof Date && !isNaN(item.date) ? item.date.toLocaleDateString() : String(item.date)}</td>
+                    <td className="p-3">{formatDisplayDate(item.date)}</td>
                     <td className="p-3">{item.description}</td>
                     <td className="p-3">{item.amount}</td>
                     <td className="p-3 relative">
@@ -167,8 +170,30 @@
                 </tr>
             );
         });
+        
+        const FileUploadComponent = ({ onFileDrop }) => {
+            const [isDragging, setIsDragging] = useState(false); 
+            const inputRef = useRef(null);
+            const handleDragEnter = (e) => { e.preventDefault(); e.stopPropagation(); setIsDragging(true); };
+            const handleDragLeave = (e) => { e.preventDefault(); e.stopPropagation(); setIsDragging(false); };
+            const handleDragOver = (e) => { e.preventDefault(); e.stopPropagation(); };
+            const handleDrop = (e) => { 
+                e.preventDefault(); 
+                e.stopPropagation(); 
+                setIsDragging(false); 
+                if (e.dataTransfer.files?.length > 0) onFileDrop(e.dataTransfer.files); 
+            };
+            return ( <div className="text-center p-6 bg-brand-surface rounded-md border-2 border-brand-text-primary shadow-retro"> <input ref={inputRef} type="file" className="hidden" accept=".xlsx, .xls, .csv" onChange={(e) => onFileDrop(e.target.files)} /> <div onDragEnter={handleDragEnter} onDragLeave={handleDragLeave} onDragOver={handleDragOver} onDrop={handleDrop} className={`p-10 border-2 border-brand-border cursor-pointer transition-all duration-300 ${isDragging ? 'border-brand-primary bg-yellow-50' : 'border-dashed'}`}> <UploadIcon /> <p className="mt-4 text-lg font-bold">Drag & drop file here</p> <p className="text-brand-text-secondary my-2">or</p> <button onClick={() => inputRef.current.click()} className="btn-retro mt-2 px-6 py-2 bg-brand-primary text-white rounded-md font-bold hover:bg-brand-primary-hover shadow-retro-sm">Choose file</button> </div> </div> );
+        };
+
+        const Card = ({ title, subtitle, children }) => ( <div className="bg-brand-surface p-8 rounded-md border-2 border-brand-text-primary shadow-retro"> <h2 className="text-2xl font-bold mb-2">{title}</h2> <p className="text-brand-text-secondary mb-6">{subtitle}</p> {children} </div> );
+
+        const ColumnMappingComponent = ({ headers, mappings, onMappingChange, onProcess, isLoading, isGoogleReady }) => ( <Card title="Step 2: Column Mapping" subtitle="Map Excel columns to application fields."><div className="space-y-4">{Object.keys(APP_DEFINED_FIELDS).filter(f => f !== 'category' && f !== 'notes').map(field => (<div key={field} className="grid grid-cols-1 md:grid-cols-2 gap-4 items-center"><label className="font-bold">{APP_DEFINED_FIELDS[field]}:</label><select value={mappings[field]} onChange={(e) => onMappingChange(field, e.target.value)} className="w-full p-2 border-2 border-brand-border rounded-md bg-white focus:ring-2 focus:ring-brand-primary focus:border-brand-primary"><option value="">Select Excel column</option>{headers.map(header => <option key={header} value={header}>{header}</option>)}</select></div>))}</div><div className="mt-8 flex justify-end"><button onClick={onProcess} disabled={isLoading || !isGoogleReady} className="btn-retro px-6 py-2 bg-brand-primary text-white rounded-md font-bold hover:bg-brand-primary-hover shadow-retro-sm flex items-center disabled:bg-gray-400 disabled:shadow-none">{isLoading && <Spinner />}<span className={isLoading ? 'ml-2' : ''}>Start Smart Categorization</span></button></div></Card> );
+        
+        const ReviewComponent = memo(({ data, categories, onCategoryChange, onNoteChange, onExport, onReset, formatDisplayDate, isLoading, tokenClient }) => ( <Card title="Step 3: Review & Export" subtitle="Review AI results, edit if needed, then export."><div className="overflow-x-auto max-h-[50vh] border-2 border-brand-border"><table className="w-full text-left table-auto"><thead className="sticky top-0 bg-brand-bg border-b-2 border-brand-text-primary"><tr><th className="p-3 font-bold">Date</th><th className="p-3 font-bold">Description</th><th className="p-3 font-bold">Amount</th><th className="p-3 font-bold w-48">Category</th><th className="p-3 font-bold w-64">Notes</th></tr></thead><tbody className="divide-y divide-brand-border bg-white">{data.map(item => ( <MemoizedTableRow key={item.id} item={item} categories={categories} onCategoryChange={onCategoryChange} onNoteChange={onNoteChange} formatDisplayDate={formatDisplayDate} /> ))}</tbody></table></div><div className="mt-8 flex justify-between items-center"><button onClick={onReset} className="font-bold hover:text-brand-primary">Start Over</button><button onClick={onExport} disabled={isLoading || !tokenClient} className="btn-retro px-6 py-2 bg-brand-secondary text-white rounded-md font-bold hover:bg-brand-secondary-hover shadow-retro-sm flex items-center disabled:bg-gray-400 disabled:shadow-none">{isLoading && <Spinner />}<span className={isLoading ? 'ml-2' : ''}>Authorize & Export</span></button></div></Card> ));
 
 
+        // --- Main App Component ---
         function App() {
             // State variables
             const [step, setStep] = useState(1);
@@ -192,9 +217,9 @@
             const [categories, setCategories] = useState(['Food', 'Clothing', 'Housing', 'Transport', 'Education', 'Entertainment', 'Investment', 'Medical', 'Income', 'Other']);
             const [payeeMappings, setPayeeMappings] = useState({});
             
-            const APP_DEFINED_FIELDS = { date: 'Date', description: 'Description', amount: 'Amount', category: 'Category', notes: 'Notes' };
-            
             const processedDataRef = useRef(processedData);
+            // **NEW**: Ref to store the callback for post-authorization action
+            const postAuthAction = useRef(null);
 
             useEffect(() => {
                 processedDataRef.current = processedData;
@@ -236,8 +261,10 @@
                         callback: (tokenResponse) => {
                             if (tokenResponse && tokenResponse.access_token) {
                                 gapi.client.setToken(tokenResponse);
-                                if(processedDataRef.current.length > 0){
-                                    exportToSheet();
+                                // **MODIFIED**: Execute the stored action after auth
+                                if (postAuthAction.current) {
+                                    postAuthAction.current();
+                                    postAuthAction.current = null; // Clear after use
                                 }
                             }
                         },
@@ -268,16 +295,19 @@
             const fetchCategoriesFromSheet = async () => {
                 if (!sheetId) {
                     console.warn("Sheet ID not set, using default categories.");
-                    return;
+                    return Promise.resolve();
                 }
-                 if (!gapi.client.getToken()) {
+                if (!gapi.client.getToken()) {
                     console.warn("Not authorized to fetch categories yet.");
-                    return;
+                    return new Promise((resolve) => {
+                        postAuthAction.current = () => fetchCategoriesFromSheet().then(resolve);
+                        tokenClient.requestAccessToken();
+                    });
                 }
                 try {
                     const response = await gapi.client.sheets.spreadsheets.values.batchGet({
                         spreadsheetId: sheetId,
-                        ranges: ['Summary!C29:C42', 'Summary!I29:I42'],
+                        ranges: ['Summary!B28:B50', 'Summary!H28:H50'], 
                     });
                     const valueRanges = response.result.valueRanges;
                     let fetchedCategories = [];
@@ -310,9 +340,7 @@
                     setError('Please map all required fields: Date, Description, and Amount.'); return;
                 }
                 
-                if (tokenClient && gapi.client.getToken()) {
-                    await fetchCategoriesFromSheet();
-                }
+                await fetchCategoriesFromSheet();
 
                 if (!geminiKey) {
                     setError('Please enter your Google Gemini API Key in the settings first.'); setIsSettingsOpen(true); return;
@@ -360,7 +388,14 @@
                 const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${geminiKey}`;
                 
                 const descriptions = items.map(item => `"${item.description}"`).join('\n');
-                const systemPrompt = `You are an expert accountant. You will be given a list of bank transaction descriptions. Your task is to categorize each one into a valid category from the provided list.
+                
+                const systemPrompt = `You are a strict data classification engine. Your ONLY function is to assign a category to a given transaction description from a predefined list.
+
+                **Rules:**
+                1.  You MUST choose a category from the 'Valid Categories' list provided below.
+                2.  You are FORBIDDEN from inventing or using any category name that is NOT on this list.
+                3.  Analyze the description and find the BEST possible match from the list.
+                4.  If no category is a clear and direct match, you MUST use the category 'Other'.
 
                 Valid Categories: ${categories.join(', ')}
 
@@ -381,7 +416,11 @@
 
                     if (!response.ok) {
                        const errorBody = await response.json();
-                       throw new Error(`API request failed: ${errorBody.error?.message || response.statusText}`);
+                       const errorMessage = errorBody.error?.message || response.statusText;
+                       if (response.status === 429 || response.status === 503 || errorMessage.toLowerCase().includes('overloaded')) {
+                           throw new Error('Retriable error');
+                       }
+                       throw new Error(`API request failed: ${errorMessage}`);
                     }
 
                     const result = await response.json();
@@ -397,6 +436,11 @@
                     });
 
                 } catch (err) {
+                    if (err.message === 'Retriable error') {
+                        console.warn("Model is busy or rate-limited, retrying batch in 2 seconds...");
+                        await new Promise(resolve => setTimeout(resolve, 2000));
+                        return categorizeWithAI(items); // Retry the whole batch
+                    }
                     console.error("AI Batch Processing Error:", err);
                     return items.map(item => {
                         item.category = 'Error';
@@ -423,15 +467,26 @@
                 setProcessedData(prevData => prevData.map(item => item.id === id ? { ...item, notes: newNote } : item));
             }, []);
 
-            const handleGoogleAuth = () => {
+            const handleGoogleAuth = useCallback(() => {
                 setError('');
                 if (!googleClientId) { setError('Please set your Google Client ID in the settings.'); setIsSettingsOpen(true); return; }
                 if (tokenClient) { 
-                    fetchCategoriesFromSheet().then(() => {
-                        tokenClient.requestAccessToken(); 
-                    });
+                    // Set the action to be exportToSheet after successful auth
+                    postAuthAction.current = exportToSheet;
+                    tokenClient.requestAccessToken(); 
                 } 
                 else { setError("Google Auth client is not ready. Please check your Client ID and refresh."); }
+            }, [googleClientId, tokenClient]);
+            
+            const formatExportDate = (date) => {
+                if (date instanceof Date && !isNaN(date)) {
+                    return date.toLocaleDateString('sv-SE'); // YYYY-MM-DD
+                }
+                if (typeof date === 'number') {
+                    const jsDate = new Date((date - 25569) * 86400 * 1000);
+                    return jsDate.toLocaleDateString('sv-SE');
+                }
+                return date;
             };
             
             const exportToSheet = async () => {
@@ -445,10 +500,7 @@
 
                     const formatData = (data, isExpense) => data.map(item => {
                         const amount = parseFloat(item.amount);
-                        const date = item.date instanceof Date && !isNaN(item.date) 
-                            ? item.date.toLocaleDateString('sv-SE') // Format to YYYY-MM-DD
-                            : item.date;
-                        return [ date, isExpense ? Math.abs(amount) : amount, item.description, item.category, item.notes || '' ];
+                        return [ formatExportDate(item.date), isExpense ? Math.abs(amount) : amount, item.description, item.category, item.notes || '' ];
                     });
 
                     const expensesValues = formatData(expenses, true);
@@ -484,20 +536,21 @@
                 } finally { setIsLoading(false); }
             };
 
-            const resetState = () => { setStep(1); setFile(null); setHeaders([]); setData([]); setProcessedData([]); setError(''); };
-
-            const FileUploadComponent = () => {
-                const [isDragging, setIsDragging] = useState(false); const inputRef = useRef(null);
-                const handleDragEnter = (e) => { e.preventDefault(); e.stopPropagation(); setIsDragging(true); };
-                const handleDragLeave = (e) => { e.preventDefault(); e.stopPropagation(); setIsDragging(false); };
-                const handleDragOver = (e) => { e.preventDefault(); e.stopPropagation(); };
-                const handleDrop = (e) => { e.preventDefault(); e.stopPropagation(); setIsDragging(false); if (e.dataTransfer.files?.length > 0) handleFileDrop(e.dataTransfer.files); };
-                return ( <div className="text-center p-6 bg-brand-surface rounded-md border-2 border-brand-text-primary shadow-retro"> <input ref={inputRef} type="file" className="hidden" accept=".xlsx, .xls, .csv" onChange={(e) => handleFileDrop(e.target.files)} /> <div onDragEnter={handleDragEnter} onDragLeave={handleDragLeave} onDragOver={handleDragOver} onDrop={handleDrop} className={`p-10 border-2 border-brand-border cursor-pointer transition-all duration-300 ${isDragging ? 'border-brand-primary bg-yellow-50' : 'border-dashed'}`}> <UploadIcon /> <p className="mt-4 text-lg font-bold">Drag & drop file here</p> <p className="text-brand-text-secondary my-2">or</p> <button onClick={() => inputRef.current.click()} className="btn-retro mt-2 px-6 py-2 bg-brand-primary text-white rounded-md font-bold hover:bg-brand-primary-hover shadow-retro-sm">Choose file</button> </div> </div> );
-            };
-            const Card = ({ title, subtitle, children }) => ( <div className="bg-brand-surface p-8 rounded-md border-2 border-brand-text-primary shadow-retro"> <h2 className="text-2xl font-bold mb-2">{title}</h2> <p className="text-brand-text-secondary mb-6">{subtitle}</p> {children} </div> );
-            const ColumnMappingComponent = ({ headers, mappings, onMappingChange, onProcess }) => ( <Card title="Step 2: Column Mapping" subtitle="Map Excel columns to application fields."><div className="space-y-4">{Object.keys(APP_DEFINED_FIELDS).filter(f => f !== 'category' && f !== 'notes').map(field => (<div key={field} className="grid grid-cols-1 md:grid-cols-2 gap-4 items-center"><label className="font-bold">{APP_DEFINED_FIELDS[field]}:</label><select value={mappings[field]} onChange={(e) => onMappingChange(field, e.target.value)} className="w-full p-2 border-2 border-brand-border rounded-md bg-white focus:ring-2 focus:ring-brand-primary focus:border-brand-primary"><option value="">Select Excel column</option>{headers.map(header => <option key={header} value={header}>{header}</option>)}</select></div>))}</div><div className="mt-8 flex justify-end"><button onClick={onProcess} disabled={isLoading || !isGoogleReady} className="btn-retro px-6 py-2 bg-brand-primary text-white rounded-md font-bold hover:bg-brand-primary-hover shadow-retro-sm flex items-center disabled:bg-gray-400 disabled:shadow-none">{isLoading && <Spinner />}<span className={isLoading ? 'ml-2' : ''}>Start Smart Categorization</span></button></div></Card> );
-            const ReviewComponent = ({ data, categories, onCategoryChange, onNoteChange, onExport, onReset }) => ( <Card title="Step 3: Review & Export" subtitle="Review AI results, edit if needed, then export."><div className="overflow-x-auto max-h-[50vh] border-2 border-brand-border"><table className="w-full text-left table-auto"><thead className="sticky top-0 bg-brand-bg border-b-2 border-brand-text-primary"><tr><th className="p-3 font-bold">Date</th><th className="p-3 font-bold">Description</th><th className="p-3 font-bold">Amount</th><th className="p-3 font-bold w-48">Category</th><th className="p-3 font-bold w-64">Notes</th></tr></thead><tbody className="divide-y divide-brand-border bg-white">{data.map(item => ( <MemoizedTableRow key={item.id} item={item} categories={categories} onCategoryChange={onCategoryChange} onNoteChange={onNoteChange} /> ))}</tbody></table></div><div className="mt-8 flex justify-between items-center"><button onClick={onReset} className="font-bold hover:text-brand-primary">Start Over</button><button onClick={onExport} disabled={isLoading || !tokenClient} className="btn-retro px-6 py-2 bg-brand-secondary text-white rounded-md font-bold hover:bg-brand-secondary-hover shadow-retro-sm flex items-center disabled:bg-gray-400 disabled:shadow-none">{isLoading && <Spinner />}<span className={isLoading ? 'ml-2' : ''}>Authorize & Export</span></button></div></Card> );
+            const resetState = useCallback(() => {
+                setStep(1); setFile(null); setHeaders([]); setData([]); setProcessedData([]); setError('');
+            }, []);
             
+            const formatDisplayDate = useCallback((date) => {
+                if (date instanceof Date && !isNaN(date)) {
+                    return date.toLocaleDateString(); // MM/DD/YYYY format
+                }
+                if (typeof date === 'number') {
+                    const jsDate = new Date((date - 25569) * 86400 * 1000);
+                    return jsDate.toLocaleDateString();
+                }
+                return String(date); 
+            }, []);
+
             if (!isGoogleReady) {
                 return <div className="flex items-center justify-center h-screen"><p className="text-xl font-bold">Loading Scripts...</p></div>;
             }
@@ -510,9 +563,9 @@
                     </header>
                     <main className="w-full max-w-4xl">
                         {error && <div className="bg-red-200 border-2 border-red-800 text-red-900 px-4 py-3 rounded-md relative mb-6 font-bold" role="alert">{error}</div>}
-                        {step === 1 && <FileUploadComponent />}
-                        {step === 2 && <ColumnMappingComponent headers={headers} mappings={mappings} onMappingChange={handleMappingChange} onProcess={processData} />}
-                        {step === 3 && <ReviewComponent data={processedData} categories={categories} onCategoryChange={handleCategoryChange} onNoteChange={handleNoteChange} onExport={handleGoogleAuth} onReset={resetState} />}
+                        {step === 1 && <FileUploadComponent onFileDrop={handleFileDrop} />}
+                        {step === 2 && <ColumnMappingComponent headers={headers} mappings={mappings} onMappingChange={handleMappingChange} onProcess={processData} isLoading={isLoading} isGoogleReady={isGoogleReady} />}
+                        {step === 3 && <ReviewComponent data={processedData} categories={categories} onCategoryChange={handleCategoryChange} onNoteChange={handleNoteChange} onExport={handleGoogleAuth} onReset={resetState} formatDisplayDate={formatDisplayDate} isLoading={isLoading} tokenClient={tokenClient}/>}
                     </main>
                     {isSettingsOpen && <SettingsModal 
                         currentSettings={{ geminiKey, googleClientId, sheetId, sheetName }}
@@ -532,7 +585,7 @@
                 </div>
             );
         }
-
+        
         const container = document.getElementById('root');
         const root = ReactDOM.createRoot(container);
         root.render(<App />);
