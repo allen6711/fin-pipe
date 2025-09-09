@@ -1,101 +1,82 @@
-from flask import Flask, request, jsonify
-import pandas as pd
-from collections import defaultdict
+# FinPipe - Showcase Backend
+# This is a simple Flask server to demonstrate the backend capabilities
+# described in the project resume, specifically parsing Excel files with Pandas.
+# For the live demo, this logic is handled on the client-side for a faster,
+# serverless user experience.
+
 import os
-import gspread
-from oauth2client.service_account import ServiceAccountCredentials
-from flask_cors import CORS
-from datetime import datetime, date
+import pandas as pd
+from flask import Flask, request, jsonify
 
+# Create a Flask application instance
 app = Flask(__name__)
-CORS(app) 
-UPLOAD_FOLDER = "temp_upload"
-app.config["UPLOAD_FOLDER"] = UPLOAD_FOLDER
-os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
-SHEET_ID = "13570nVTtolSe2iatWWhEYDsePYts_WTn75Itwwk8duA"
-SHEET_NAME = "收支表"
-
-def get_gspread_client():
-    scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
-    creds = ServiceAccountCredentials.from_json_keyfile_name("money-pipe-109eeb88f0cd.json", scope)
-    return gspread.authorize(creds)
-
-@app.route("/upload_csv", methods=["POST"])
-def upload_csv():
-    file = request.files["file"]
-    filepath = os.path.join(app.config["UPLOAD_FOLDER"], file.filename)
-    file.save(filepath)
-    df = pd.read_csv(filepath)
-    payee_col = next((col for col in df.columns if "payee" in col.strip().lower()), None)
-    if not payee_col:
-        return jsonify({"error": "Payee column not found in CSV."}), 400
-
-    payees = df[payee_col].dropna().unique().tolist()
-    return jsonify({"payees": payees, "csv_path": filepath})
-
-@app.route("/submit_categories", methods=["POST"])
-def submit_categories():
-    """Receives category mappings and writes processed data to Google Sheets."""
-    data = request.json
-    mapping_from_frontend = data["mapping"]
-    csv_path = data["csv_path"]
-
-    cleaned_mapping = {key.strip(): value for key, value in mapping_from_frontend.items()}
-
-    df = pd.read_csv(csv_path)
-
-    # ✅ 關鍵修正：明確指定日期的格式為 "月/日/年"
-    df["Posted Date"] = pd.to_datetime(df["Posted Date"], format="%m/%d/%Y", errors="coerce")
+def process_spreadsheet(file_path):
+    """
+    This function demonstrates how to read an Excel or CSV file using Pandas,
+    process it, and return it as a list of dictionaries.
     
-    # 丟棄任何日期解析失敗的行
-    df = df.dropna(subset=["Posted Date"])
-    
-
-    records = []
-    for _, row in df.iterrows():
-        if pd.isna(row["Payee"]):
-            continue
-            
-        payee_from_csv = str(row["Payee"]).strip()
-        posted_date_str = row["Posted Date"].strftime("%Y/%m/%d")
-        note = payee_from_csv
-        category = cleaned_mapping.get(payee_from_csv, "Uncategorized")
-        
-        amount = pd.to_numeric(row.get("Amount"), errors='coerce')
-
-        record = None
-        if pd.notna(amount):
-            if amount < 0:
-                record = ["", posted_date_str, "Expense", "", "", category, abs(amount), note]
-            elif amount > 0:
-                record = ["", posted_date_str, "Income", category, abs(amount), "", "", note]
-
-
-        if record:
-            records.append(record)
-
-    # --- Write data to Google Sheets ---
+    In a fully integrated system, this function would be called by an API endpoint.
+    """
     try:
-        client = get_gspread_client()
-        sheet = client.open_by_key(SHEET_ID).worksheet(SHEET_NAME)
-        
-        if not records:
-            return jsonify({"status": "success", "rows_written": 0, "message": "No valid records to write."})
+        # Check the file extension and use the appropriate pandas function
+        if file_path.endswith('.xlsx'):
+            df = pd.read_excel(file_path)
+        elif file_path.endswith('.csv'):
+            df = pd.read_csv(file_path)
+        else:
+            return {"error": "Unsupported file type"}
 
-        sheet.append_rows(records, value_input_option='USER_ENTERED')
-        return jsonify({"status": "success", "rows_written": len(records)})
-        
+        # --- Data Processing Demonstration ---
+        # 1. Drop rows with any missing values for demonstration
+        df.dropna(inplace=True)
+
+        # 2. Convert known date columns to datetime objects (if any)
+        # Example: If there's a column named 'Transaction Date', you'd uncomment the next line
+        # df['Transaction Date'] = pd.to_datetime(df['Transaction Date'])
+
+        # 3. Normalize column names (e.g., lowercase and replace spaces with underscores)
+        df.columns = df.columns.str.lower().str.replace(' ', '_')
+
+        # Convert the processed DataFrame to a list of dictionaries
+        processed_data = df.to_dict(orient='records')
+
+        return processed_data
+
     except Exception as e:
-        print(f"Error writing to Google Sheets: {e}")
-        return jsonify({"error": f"Failed to write to Google Sheets: {str(e)}"}), 500
+        return {"error": str(e)}
 
+@app.route("/")
+def index():
+    """
+    Root endpoint to confirm the server is running.
+    """
+    return "<h1>FinPipe Backend Server</h1><p>This server is a showcase for Python/Pandas data processing.</p>"
 
+# Example of how to use the processing function (for demonstration only)
+# To test this, you would place a sample file in the backend directory
+# and call this function from within a Python environment.
+if __name__ == '__main__':
+    # This part is for demonstration and won't run when using 'flask run'
+    
+    # Create a dummy excel file for testing if it doesn't exist
+    if not os.path.exists("sample_data.xlsx"):
+        dummy_data = {
+            'Date': ['2025-01-10', '2025-01-11'],
+            'Description': ['Sample Coffee Shop', 'Sample Book Store'],
+            'Amount': [-5.00, -25.00]
+        }
+        dummy_df = pd.DataFrame(dummy_data)
+        dummy_df.to_excel("sample_data.xlsx", index=False)
+        print("Created 'sample_data.xlsx' for demonstration.")
 
-print("🧭 註冊的 route 有：")
-for rule in app.url_map.iter_rules():
-    print(f"{rule.endpoint}: {rule.methods} -> {rule}")
-
-if __name__ == "__main__":
-    app.run(debug=True, port=5050)
-
+    print("\n--- Demonstrating Pandas Processing ---")
+    processed_result = process_spreadsheet('sample_data.xlsx')
+    print("Processed Data:")
+    import json
+    print(json.dumps(processed_result, indent=2))
+    print("-------------------------------------\n")
+    
+    # To run the web server, use the command: flask run
+    # The server will be available at http://127.0.0.1:5000
+    app.run(debug=True)
