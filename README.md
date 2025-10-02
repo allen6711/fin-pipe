@@ -59,11 +59,6 @@ Create the OAuth Client ID:
 
 Application type: "Web application".
 
-Under "Authorized JavaScript origins", add the following two URIs for local testing:
-
-http://localhost:5500
-
-http://127.0.0.1:5500
 
 Click "Create" and copy the generated Client ID.
 
